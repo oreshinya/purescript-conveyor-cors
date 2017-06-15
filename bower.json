@@ -26,12 +26,15 @@
   "dependencies": {
     "purescript-node-http": "^4.0.0",
     "purescript-maybe": "^3.0.0",
-    "purescript-conveyor": "^0.3.1",
+    "purescript-conveyor": "^0.3.2",
     "purescript-transformers": "^3.4.0",
     "purescript-eff": "^3.1.0",
     "purescript-prelude": "^3.0.0",
     "purescript-maps": "^3.3.1",
     "purescript-strings": "^3.2.1",
     "purescript-arrays": "^4.1.0"
+  },
+  "devDependencies": {
+    "purescript-node-process": "^4.0.0"
   }
 }

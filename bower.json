@@ -1,0 +1,37 @@
+{
+  "name": "purescript-conveyor-cors",
+  "license": "MIT",
+  "homepage": "https://github.com/oreshinya/purescript-conveyor-cors",
+  "authors": [
+    "Shinya Takahashi <s.takahashi313@gmail.com>"
+  ],
+  "description": "CORS for purescript-conveyor",
+  "keywords": [
+    "purescript",
+    "cors"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/oreshinya/purescript-conveyor-cors.git"
+  },
+  "moduleType": [
+    "node"
+  ],
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-node-http": "^4.0.0",
+    "purescript-maybe": "^3.0.0",
+    "purescript-conveyor": "^0.3.1",
+    "purescript-transformers": "^3.4.0",
+    "purescript-eff": "^3.1.0",
+    "purescript-prelude": "^3.0.0",
+    "purescript-maps": "^3.3.1",
+    "purescript-strings": "^3.2.1",
+    "purescript-arrays": "^4.1.0"
+  }
+}

@@ -4,6 +4,8 @@
 
 CORS for [purescript-conveyor](https://github.com/oreshinya/purescript-conveyor).
 
+See [example](https://github.com/oreshinya/purescript-conveyor-cors/blob/master/example/Main.purs#L86).
+
 ## Installation
 
 ```

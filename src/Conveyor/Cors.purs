@@ -12,8 +12,8 @@ import Conveyor (Break(..), Context(..))
 import Data.Array (length, nub, (:))
 import Data.Maybe (Maybe(..), maybe)
 import Data.String (Pattern(..), split, joinWith)
-import Data.StrMap (lookup, member)
-import Node.HTTP (HTTP, Request, requestHeaders, setHeader, setHeaders, requestMethod)
+import Data.StrMap (StrMap, lookup, member)
+import Node.HTTP (HTTP, Request, Response, requestHeaders, setHeader, setHeaders, requestMethod)
 
 
 
@@ -87,7 +87,7 @@ setAllowHeaders settings ctx =
 
 setAllowHeadersFromRequest :: forall e. Context -> Eff (http :: HTTP | e) Unit
 setAllowHeadersFromRequest (Context { req, res }) =
-  case (requestHeader req "Access-Control-Request-Headers") of
+  case (requestHeader req "access-control-request-headers") of
     Nothing -> pure unit
     Just h -> setHeader res "Access-Control-Allow-Headers" h
 
@@ -144,8 +144,8 @@ setOrigin settings (Context { res }) =
 
 
 setOriginToVary :: forall e. Context -> Eff (http :: HTTP | e) Unit
-setOriginToVary (Context { req, res }) =
-  setHeader res "Vary" $ maybe "Origin" addOriginToVary $ requestHeader req "Vary"
+setOriginToVary (Context { res }) =
+  setHeader res "Vary" $ maybe "Origin" addOriginToVary $ responseHeader res "vary"
 
 
 
@@ -164,8 +164,13 @@ existsRequestHeader req key = member key $ requestHeaders req
 
 
 
+responseHeader :: Response -> String -> Maybe String
+responseHeader res key = lookup key $ responseHeaders res
+
+
+
 isNoOrigin :: Context -> Boolean
-isNoOrigin (Context { req }) = not $ existsRequestHeader req "Origin"
+isNoOrigin (Context { req }) = not $ existsRequestHeader req "origin"
 
 
 
@@ -181,3 +186,7 @@ divider = ","
 
 pattern :: Pattern
 pattern = Pattern divider
+
+
+
+foreign import responseHeaders :: Response -> StrMap String

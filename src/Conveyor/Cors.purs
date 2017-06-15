@@ -1,4 +1,4 @@
-module Cors
+module Conveyor.Cors
   ( Settings
   , defaultSettings
   , cors

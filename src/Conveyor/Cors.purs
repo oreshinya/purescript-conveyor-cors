@@ -9,11 +9,11 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Except (ExceptT, throwError)
 import Conveyor (Break(..), Context(..))
-import Data.Array (length, nub, (:))
-import Data.Maybe (Maybe(..), maybe)
-import Data.String (Pattern(..), split, joinWith)
-import Data.StrMap (StrMap, lookup, member)
-import Node.HTTP (HTTP, Request, Response, requestHeaders, setHeader, setHeaders, requestMethod)
+import Data.Array (length)
+import Data.Maybe (Maybe(..))
+import Data.StrMap (lookup, member)
+import Node.HTTP (HTTP, Request, requestHeaders, setHeader, setHeaders, requestMethod)
+import Node.HTTP.Vary (vary)
 
 
 
@@ -144,13 +144,7 @@ setOrigin settings (Context { res }) =
 
 
 setOriginToVary :: forall e. Context -> Eff (http :: HTTP | e) Unit
-setOriginToVary (Context { res }) =
-  setHeader res "Vary" $ maybe "Origin" addOriginToVary $ responseHeader res "vary"
-
-
-
-addOriginToVary :: String -> String
-addOriginToVary vary = joinWith divider $ nub $ "Origin" : split pattern vary
+setOriginToVary (Context { res }) = vary res "Origin"
 
 
 
@@ -164,11 +158,6 @@ existsRequestHeader req key = member key $ requestHeaders req
 
 
 
-responseHeader :: Response -> String -> Maybe String
-responseHeader res key = lookup key $ responseHeaders res
-
-
-
 isNoOrigin :: Context -> Boolean
 isNoOrigin (Context { req }) = not $ existsRequestHeader req "origin"
 
@@ -176,17 +165,3 @@ isNoOrigin (Context { req }) = not $ existsRequestHeader req "origin"
 
 isNotPreflight :: Context -> Boolean
 isNotPreflight (Context { req }) = (requestMethod req) /= "OPTIONS"
-
-
-
-divider :: String
-divider = ","
-
-
-
-pattern :: Pattern
-pattern = Pattern divider
-
-
-
-foreign import responseHeaders :: Response -> StrMap String

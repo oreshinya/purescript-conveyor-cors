@@ -14,7 +14,7 @@ import Data.Int (fromString)
 import Node.HTTP (HTTP, requestHeaders)
 import Node.Process (PROCESS, lookupEnv)
 import Data.Generic.Rep (class Generic)
-import Conveyor (App(..), Config(..), Context(..), Break, Result(..), Router(..), (:>), run)
+import Conveyor (App, Config(..), Context(..), Break, Result(..), Respond, Router, app, route, (:>), run)
 import Conveyor.Cors (Settings, defaultSettings, cors)
 
 
@@ -62,7 +62,7 @@ myJson _ = pure $ Result { status: 200, body: Just $ MyJson { content: "test con
 
 
 router :: forall e. Router Context e MyJson
-router = Router [ "/myJson" :> myJson ]
+router = route [ "/myJson" :> myJson ]
 
 
 
@@ -77,10 +77,7 @@ corsSettings = defaultSettings
 
 
 
-respond :: forall e.
-        Context ->
-        (Context -> ExceptT Break (Eff (http :: HTTP, console :: CONSOLE | e)) (Result MyJson)) ->
-        ExceptT Break (Eff (http :: HTTP, console :: CONSOLE | e)) (Result MyJson)
+respond :: forall e. Respond Context (http :: HTTP, console :: CONSOLE | e) MyJson
 respond ctx@(Context { req }) exec = do
   liftEff $ log $ show $ requestHeaders req
   void $ cors corsSettings ctx
@@ -88,15 +85,12 @@ respond ctx@(Context { req }) exec = do
 
 
 
-app :: forall e. App Context (http :: HTTP, console :: CONSOLE | e) MyJson
-app = App
-  { router
-  , respond
-  }
+app' :: forall e. App Context (http :: HTTP, console :: CONSOLE | e) MyJson
+app' = app router respond
 
 
 
 main :: forall e. Eff (process :: PROCESS, console :: CONSOLE, exception :: EXCEPTION, ref :: REF, http :: HTTP | e ) Unit
 main = do
   config <- getConfig
-  run config app
+  run config app'

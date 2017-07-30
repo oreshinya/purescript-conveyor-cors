@@ -1,18 +1,18 @@
 module Conveyor.Cors
   ( Settings
   , defaultSettings
-  , cors
+  , Cors, cors
   ) where
 
 import Prelude
+
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Except (ExceptT, throwError)
-import Conveyor (Break(..), Context(..))
+import Conveyor.Responsable (errorMsg, statusOnly, respond)
+import Conveyor.Servable (class Servable, serve)
 import Data.Array (length)
 import Data.Maybe (Maybe(..))
 import Data.StrMap (lookup, member)
-import Node.HTTP (HTTP, Request, requestHeaders, setHeader, setHeaders, requestMethod)
+import Node.HTTP (HTTP, Request, Response, requestHeaders, setHeader, setHeaders, requestMethod)
 import Node.HTTP.Vary (vary)
 
 
@@ -24,6 +24,8 @@ type Settings =
   , maxAge :: Maybe Int
   , allowHeaders :: Array String
   }
+
+data Cors s = Cors Settings s
 
 
 
@@ -38,113 +40,113 @@ defaultSettings =
 
 
 
-cors :: forall e. Settings -> Context -> ExceptT Break (Eff (http :: HTTP | e)) Context
-cors settings ctx =
-  if isNoOrigin ctx
-    then pure ctx
-    else setCorsHeaders settings ctx
+cors :: forall e s. Servable e s => Settings -> s -> Cors s
+cors settings server = Cors settings server
 
 
 
-setCorsHeaders :: forall e. Settings -> Context -> ExceptT Break (Eff (http :: HTTP | e)) Context
-setCorsHeaders settings ctx = do
-  liftEff $ setOriginToVary ctx
-  liftEff $ setOrigin settings ctx
-  if isNotPreflight ctx
+setCorsHeaders :: forall e s.
+                  Servable e s =>
+                  Settings ->
+                  s ->
+                  Request ->
+                  Response ->
+                  String ->
+                  Maybe (Eff (http :: HTTP | e) Unit)
+setCorsHeaders settings handler req res path = Just do
+  vary res "Origin"
+  setOrigin settings res
+  if isNotPreflight req
     then do
-      liftEff $ setCorsHeadersIfNotPreflight settings ctx
-      pure ctx
+      setCorsHeadersIfNotPreflight settings res
+      case serve handler req res path of
+        Nothing -> respond res $ errorMsg 404 "No such route"
+        Just s -> s
     else do
-      liftEff $ setCorsHeadersIfPreflight settings ctx
-      throwError $ Break { status: 204, message: Nothing }
+      setCorsHeadersIfPreflight settings req res
+      respond res $ statusOnly 204
 
 
 
-setCorsHeadersIfPreflight :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setCorsHeadersIfPreflight settings ctx = do
-  setCredentials settings ctx
-  setMaxAge settings ctx
-  setAllowMethods ctx
-  setAllowHeaders settings ctx
+setCorsHeadersIfPreflight :: forall e. Settings -> Request -> Response -> Eff (http :: HTTP | e) Unit
+setCorsHeadersIfPreflight settings req res = do
+  setCredentials settings res
+  setMaxAge settings res
+  setAllowMethods res
+  setAllowHeaders settings req res
 
 
 
-
-setCorsHeadersIfNotPreflight :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setCorsHeadersIfNotPreflight settings ctx = do
-  setCredentialsIfSpecifiedOrigin settings ctx
-  setExposeHeaders settings ctx
-
+setCorsHeadersIfNotPreflight :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setCorsHeadersIfNotPreflight settings res = do
+  setCredentialsIfSpecifiedOrigin settings res
+  setExposeHeaders settings res
 
 
-setAllowHeaders :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setAllowHeaders settings ctx =
+
+setAllowHeaders :: forall e. Settings -> Request -> Response -> Eff (http :: HTTP | e) Unit
+setAllowHeaders settings req res =
   if (length settings.allowHeaders) <= 0
-    then setAllowHeadersFromRequest ctx
-    else setAllowHeadersFromSettings settings ctx
+    then setAllowHeadersFromRequest req res
+    else setAllowHeadersFromSettings settings res
 
 
 
-setAllowHeadersFromRequest :: forall e. Context -> Eff (http :: HTTP | e) Unit
-setAllowHeadersFromRequest (Context { req, res }) =
+setAllowHeadersFromRequest :: forall e. Request -> Response -> Eff (http :: HTTP | e) Unit
+setAllowHeadersFromRequest req res =
   case (requestHeader req "access-control-request-headers") of
     Nothing -> pure unit
     Just h -> setHeader res "Access-Control-Allow-Headers" h
 
 
 
-setAllowHeadersFromSettings :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setAllowHeadersFromSettings settings (Context { res }) =
+setAllowHeadersFromSettings :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setAllowHeadersFromSettings settings res =
   setHeaders res "Access-Control-Allow-Headers" settings.allowHeaders
 
 
 
-setAllowMethods :: forall e. Context -> Eff (http :: HTTP | e) Unit
-setAllowMethods (Context { res }) =
+setAllowMethods :: forall e. Response -> Eff (http :: HTTP | e) Unit
+setAllowMethods res =
   setHeaders res "Access-Control-Allow-Methods" [ "OPTIONS", "POST" ]
 
 
 
-setMaxAge :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setMaxAge settings (Context { res }) =
+setMaxAge :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setMaxAge settings res =
   case settings.maxAge of
     Nothing -> pure unit
     Just i -> setHeader res "Access-Control-Max-Age" $ show i
 
 
 
-setExposeHeaders :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setExposeHeaders settings (Context { res }) =
+setExposeHeaders :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setExposeHeaders settings res =
   if (length settings.exposeHeaders) <= 0
     then pure unit
     else setHeaders res "Access-Control-Expose-Headers" settings.exposeHeaders
 
 
 
-setCredentialsIfSpecifiedOrigin :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setCredentialsIfSpecifiedOrigin settings ctx =
+setCredentialsIfSpecifiedOrigin :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setCredentialsIfSpecifiedOrigin settings res =
   if settings.origin == "*"
     then pure unit
-    else setCredentials settings ctx
+    else setCredentials settings res
 
 
 
-setCredentials :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setCredentials settings (Context { res }) =
+setCredentials :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setCredentials settings res =
   if settings.credentials
     then setHeader res "Access-Control-Allow-Credentials" "true"
     else pure unit
 
 
 
-setOrigin :: forall e. Settings -> Context -> Eff (http :: HTTP | e) Unit
-setOrigin settings (Context { res }) =
+setOrigin :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setOrigin settings res =
   setHeader res "Access-Control-Allow-Origin" settings.origin
-
-
-
-setOriginToVary :: forall e. Context -> Eff (http :: HTTP | e) Unit
-setOriginToVary (Context { res }) = vary res "Origin"
 
 
 
@@ -158,10 +160,18 @@ existsRequestHeader req key = member key $ requestHeaders req
 
 
 
-isNoOrigin :: Context -> Boolean
-isNoOrigin (Context { req }) = not $ existsRequestHeader req "origin"
+isNoOrigin :: Request -> Boolean
+isNoOrigin req = not $ existsRequestHeader req "origin"
 
 
 
-isNotPreflight :: Context -> Boolean
-isNotPreflight (Context { req }) = (requestMethod req) /= "OPTIONS"
+isNotPreflight :: Request -> Boolean
+isNotPreflight req = (requestMethod req) /= "OPTIONS"
+
+
+
+instance serverableCors :: Servable e s => Servable e (Cors s) where
+  serve (Cors settings handler) req res path =
+    if isNoOrigin req
+      then serve handler req res path
+      else setCorsHeaders settings handler req res path

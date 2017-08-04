@@ -75,4 +75,4 @@ corsSettings = defaultSettings
 main :: forall e. Eff (process :: PROCESS, exception :: EXCEPTION, ref :: REF, http :: HTTP | e ) Unit
 main = do
   config <- getConfig
-  run config $ cors corsSettings { myJson }
+  run (cors corsSettings { myJson }) config

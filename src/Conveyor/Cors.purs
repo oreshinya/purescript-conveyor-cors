@@ -40,26 +40,27 @@ defaultSettings =
 
 
 
-cors :: forall e s. Servable e s => Settings -> s -> Cors s
+cors :: forall c e s. Servable c e s => Settings -> s -> Cors s
 cors settings server = Cors settings server
 
 
 
-setCorsHeaders :: forall e s.
-                  Servable e s =>
+setCorsHeaders :: forall c e s.
+                  Servable c e s =>
                   Settings ->
+                  c ->
                   s ->
                   Request ->
                   Response ->
                   String ->
                   Maybe (Eff (http :: HTTP | e) Unit)
-setCorsHeaders settings handler req res path = Just do
+setCorsHeaders settings ctx handler req res path = Just do
   vary res "Origin"
   setOrigin settings res
   if isNotPreflight req
     then do
       setCorsHeadersIfNotPreflight settings res
-      case serve handler req res path of
+      case serve ctx handler req res path of
         Nothing -> respond res $ errorMsg 404 "No such route"
         Just s -> s
     else do
@@ -170,8 +171,8 @@ isNotPreflight req = (requestMethod req) /= "OPTIONS"
 
 
 
-instance serverableCors :: Servable e s => Servable e (Cors s) where
-  serve (Cors settings handler) req res path =
+instance serverableCors :: Servable c e s => Servable c e (Cors s) where
+  serve ctx (Cors settings handler) req res path =
     if isNoOrigin req
-      then serve handler req res path
-      else setCorsHeaders settings handler req res path
+      then serve ctx handler req res path
+      else setCorsHeaders settings ctx handler req res path

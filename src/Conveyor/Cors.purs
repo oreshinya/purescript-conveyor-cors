@@ -7,7 +7,7 @@ module Conveyor.Cors
 import Prelude
 
 import Control.Monad.Eff (Eff)
-import Conveyor.Responsable (errorMsg, statusOnly, respond)
+import Conveyor.Respondable (class Respondable, ConveyorError(..), respond)
 import Conveyor.Servable (class Servable, serve)
 import Data.Array (length)
 import Data.Maybe (Maybe(..))
@@ -24,6 +24,13 @@ type Settings =
   , maxAge :: Maybe Int
   , allowHeaders :: Array String
   }
+
+newtype StatusOnly = StatusOnly Int
+
+instance respondableStatusOnly :: Respondable StatusOnly where
+  statusCode (StatusOnly status) = status
+  encodeBody _ = ""
+  systemError _ = StatusOnly 500
 
 data Cors s = Cors Settings s
 
@@ -61,11 +68,11 @@ setCorsHeaders settings ctx handler req res path = Just do
     then do
       setCorsHeadersIfNotPreflight settings res
       case serve ctx handler req res path of
-        Nothing -> respond res $ errorMsg 404 "No such route"
+        Nothing -> respond res $ ConveyorError 404 "No such route"
         Just s -> s
     else do
       setCorsHeadersIfPreflight settings req res
-      respond res $ statusOnly 204
+      respond res $ StatusOnly 204
 
 
 

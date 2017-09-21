@@ -52,15 +52,16 @@ cors settings server = Cors settings server
 
 
 
-setCorsHeaders :: forall c e s.
-                  Servable c e s =>
-                  Settings ->
-                  c ->
-                  s ->
-                  Request ->
-                  Response ->
-                  String ->
-                  Maybe (Eff (http :: HTTP | e) Unit)
+setCorsHeaders
+  :: forall c e s
+   . Servable c e s
+  => Settings
+  -> c
+  -> s
+  -> Request
+  -> Response
+  -> String
+  -> Maybe (Eff (http :: HTTP | e) Unit)
 setCorsHeaders settings ctx handler req res path = Just do
   vary res "Origin"
   setOrigin settings res

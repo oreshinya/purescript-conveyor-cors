@@ -31,6 +31,7 @@ instance respondableResult :: Encode r => Respondable (Result r) where
   encodeBody (Failure f) = "{ \"message\": [\"" <> f.message <> "\"] }"
 
   systemError _ = Failure { status: 500, message: "Internal server error" }
+  contentType _ = "application/json"
 
 
 newtype MyJson = MyJson { content :: String }

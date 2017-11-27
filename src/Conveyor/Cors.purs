@@ -31,6 +31,7 @@ instance respondableStatusOnly :: Respondable StatusOnly where
   statusCode (StatusOnly status) = status
   encodeBody _ = ""
   systemError _ = StatusOnly 500
+  contentType _ = "text/plain"
 
 data Cors s = Cors Settings s
 

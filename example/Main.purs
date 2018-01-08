@@ -2,20 +2,16 @@ module Main where
 
 import Prelude
 
+import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Exception (EXCEPTION)
-import Control.Monad.Eff.Ref (REF)
 import Conveyor (run)
 import Conveyor.Cors (Settings, defaultSettings, cors)
-import Conveyor.Handler (Handler)
-import Conveyor.Respondable (class Respondable)
-import Data.Foreign.Class (class Encode)
-import Data.Foreign.Generic (defaultOptions, genericEncode, encodeJSON)
-import Data.Generic.Rep (class Generic)
+import Conveyor.Respondable (class Respondable, Responder(..))
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
 import Node.HTTP (HTTP, ListenOptions)
 import Node.Process (PROCESS, lookupEnv)
+import Simple.JSON (class WriteForeign, write)
 
 
 
@@ -23,23 +19,24 @@ data Result r
   = Success { status :: Int, body :: r }
   | Failure { status :: Int, message :: String }
 
-instance respondableResult :: Encode r => Respondable (Result r) where
-  statusCode (Success s) = s.status
-  statusCode (Failure f) = f.status
-
-  encodeBody (Success s) = encodeJSON s.body
-  encodeBody (Failure f) = "{ \"message\": [\"" <> f.message <> "\"] }"
-
-  systemError _ = Failure { status: 500, message: "Internal server error" }
-  contentType _ = "application/json"
+type MyJson = { content :: String }
 
 
-newtype MyJson = MyJson { content :: String }
 
-derive instance genericMyJson :: Generic MyJson _
-
-instance encodeMyJson :: Encode MyJson where
-  encode = genericEncode $ defaultOptions { unwrapSingleConstructors = true }
+instance respondableResult :: WriteForeign r => Respondable (Result r) where
+  toResponder (Success s) =
+    Responder
+      { contentType: "application/json"
+      , code: s.status
+      , body: write s.body
+      }
+  toResponder (Failure f) =
+    Responder
+      { contentType: "application/json"
+      , code: f.status
+      , body: write { messages: [ f.message ] }
+      }
+  fromError _ = Failure { status: 500, message: "Internal server error ;)" }
 
 
 
@@ -71,10 +68,10 @@ getConfig = do
 
 
 
-myJson :: forall e. Handler e (Result MyJson)
+myJson :: forall e. Aff e (Result MyJson)
 myJson = pure $ Success
   { status: 200
-  , body: MyJson { content: "test content :)" }
+  , body: { content: "test content :)" }
   }
 
 
@@ -90,7 +87,7 @@ corsSettings = defaultSettings
 
 
 
-main :: forall e. Eff (process :: PROCESS, exception :: EXCEPTION, ref :: REF, http :: HTTP | e ) Unit
+main :: forall e. Eff (process :: PROCESS, http :: HTTP | e ) Unit
 main = do
   config <- getConfig
-  run (cors corsSettings { myJson }) config
+  run config (cors corsSettings { myJson })

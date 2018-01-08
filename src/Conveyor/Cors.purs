@@ -6,10 +6,14 @@ module Conveyor.Cors
 
 import Prelude
 
+import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
-import Conveyor.Respondable (class Respondable, ConveyorError(..), respond)
+import Control.Monad.Eff.Class (liftEff)
+import Conveyor.Argument (RawData(..))
+import Conveyor.Respondable (class Respondable, Responder(..), toResponder)
 import Conveyor.Servable (class Servable, serve)
 import Data.Array (length)
+import Data.Foreign (toForeign)
 import Data.Maybe (Maybe(..))
 import Data.StrMap (lookup, member)
 import Node.HTTP (HTTP, Request, Response, requestHeaders, setHeader, setHeaders, requestMethod)
@@ -28,10 +32,13 @@ type Settings =
 newtype StatusOnly = StatusOnly Int
 
 instance respondableStatusOnly :: Respondable StatusOnly where
-  statusCode (StatusOnly status) = status
-  encodeBody _ = ""
-  systemError _ = StatusOnly 500
-  contentType _ = "text/plain"
+  toResponder (StatusOnly code) =
+    Responder
+      { contentType: "text/plain"
+      , code
+      , body: toForeign ""
+      }
+  fromError _ = StatusOnly 500
 
 data Cors s = Cors Settings s
 
@@ -55,26 +62,22 @@ cors settings server = Cors settings server
 
 setCorsHeaders
   :: forall c e s
-   . Servable c e s
+   . Servable c (http :: HTTP | e) s
   => Settings
-  -> c
   -> s
-  -> Request
-  -> Response
-  -> String
-  -> Maybe (Eff (http :: HTTP | e) Unit)
-setCorsHeaders settings ctx handler req res path = Just do
-  vary res "Origin"
-  setOrigin settings res
-  if isNotPreflight req
+  -> c
+  -> RawData
+  -> Aff (http :: HTTP | e) Responder
+setCorsHeaders settings servable ctx rawData@(RawData rd) = do
+  liftEff $ vary rd.res "Origin"
+  liftEff $ setOrigin settings rd.res
+  if isNotPreflight rd.req
     then do
-      setCorsHeadersIfNotPreflight settings res
-      case serve ctx handler req res path of
-        Nothing -> respond res $ ConveyorError 404 "No such route"
-        Just s -> s
-    else do
-      setCorsHeadersIfPreflight settings req res
-      respond res $ StatusOnly 204
+      liftEff $ setCorsHeadersIfNotPreflight settings rd.res
+      serve servable ctx rawData
+    else liftEff do
+      setCorsHeadersIfPreflight settings rd.req rd.res
+      pure $ toResponder $ StatusOnly 204
 
 
 
@@ -180,8 +183,8 @@ isNotPreflight req = (requestMethod req) /= "OPTIONS"
 
 
 
-instance serverableCors :: Servable c e s => Servable c e (Cors s) where
-  serve ctx (Cors settings handler) req res path =
-    if isNoOrigin req
-      then serve ctx handler req res path
-      else setCorsHeaders settings ctx handler req res path
+instance serverableCors :: Servable c (http :: HTTP | e) s => Servable c (http :: HTTP | e) (Cors s) where
+  serve (Cors settings servable) ctx rawData@(RawData rd) =
+    if isNoOrigin rd.req
+      then serve servable ctx rawData
+      else setCorsHeaders settings servable ctx rawData

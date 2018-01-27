@@ -4,12 +4,12 @@ import Prelude
 
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
-import Conveyor (run)
+import Conveyor (handler)
 import Conveyor.Cors (Settings, defaultSettings, cors)
 import Conveyor.Respondable (class Respondable, Responder(..))
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
-import Node.HTTP (HTTP, ListenOptions)
+import Node.HTTP (HTTP, ListenOptions, createServer, listen)
 import Node.Process (PROCESS, lookupEnv)
 import Simple.JSON (class WriteForeign, write)
 
@@ -26,13 +26,13 @@ type MyJson = { content :: String }
 instance respondableResult :: WriteForeign r => Respondable (Result r) where
   toResponder (Success s) =
     Responder
-      { contentType: "application/json"
+      { contentType: "application/json; charset=utf-8"
       , code: s.status
       , body: write s.body
       }
   toResponder (Failure f) =
     Responder
-      { contentType: "application/json"
+      { contentType: "application/json; charset=utf-8"
       , code: f.status
       , body: write { messages: [ f.message ] }
       }
@@ -90,4 +90,5 @@ corsSettings = defaultSettings
 main :: forall e. Eff (process :: PROCESS, http :: HTTP | e ) Unit
 main = do
   config <- getConfig
-  run config (cors corsSettings { myJson })
+  server <- createServer $ handler $ cors corsSettings { myJson }
+  listen server config $ pure unit

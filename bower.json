@@ -24,7 +24,7 @@
     "output"
   ],
   "dependencies": {
-    "purescript-conveyor": "^0.11.0",
+    "purescript-conveyor": "^0.12.0",
     "purescript-vary": "^0.2.0"
   },
   "devDependencies": {

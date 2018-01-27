@@ -34,7 +34,7 @@ newtype StatusOnly = StatusOnly Int
 instance respondableStatusOnly :: Respondable StatusOnly where
   toResponder (StatusOnly code) =
     Responder
-      { contentType: "text/plain"
+      { contentType: "text/plain; charset=utf-8"
       , code
       , body: toForeign ""
       }

@@ -6,7 +6,7 @@ import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
 import Conveyor (handler)
 import Conveyor.Cors (Settings, defaultSettings, cors)
-import Conveyor.Respondable (class Respondable, Responder(..))
+import Conveyor.Respondable (class Respondable, class RespondableError, Responder(..))
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
 import Node.HTTP (HTTP, ListenOptions, createServer, listen)
@@ -36,6 +36,8 @@ instance respondableResult :: WriteForeign r => Respondable (Result r) where
       , code: f.status
       , body: write { messages: [ f.message ] }
       }
+
+instance respondableErrorResult :: WriteForeign r => RespondableError (Result r) where
   fromError _ = Failure { status: 500, message: "Internal server error ;)" }
 
 

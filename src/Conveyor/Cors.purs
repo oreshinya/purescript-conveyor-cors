@@ -38,7 +38,6 @@ instance respondableStatusOnly :: Respondable StatusOnly where
       , code
       , body: toForeign ""
       }
-  fromError _ = StatusOnly 500
 
 data Cors s = Cors Settings s
 

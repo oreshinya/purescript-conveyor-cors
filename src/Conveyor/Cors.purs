@@ -9,9 +9,9 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
-import Conveyor.Argument (RawData(..))
-import Conveyor.Respondable (class Respondable, Responder(..), toResponder)
+import Conveyor.Respondable (class Respondable, toResponder)
 import Conveyor.Servable (class Servable, serve)
+import Conveyor.Types (Responder(..), RawData)
 import Data.Array (length)
 import Data.Foreign (toForeign)
 import Data.Maybe (Maybe(..))
@@ -39,7 +39,7 @@ instance respondableStatusOnly :: Respondable StatusOnly where
       , body: toForeign ""
       }
 
-data Cors s = Cors Settings s
+data Cors server = Cors Settings server
 
 
 
@@ -54,33 +54,33 @@ defaultSettings =
 
 
 
-cors :: forall c e s. Servable c e s => Settings -> s -> Cors s
-cors settings server = Cors settings server
+cors :: forall ex eff server. Servable ex eff server => Settings -> server -> Cors server
+cors = Cors
 
 
 
 setCorsHeaders
-  :: forall c e s
-   . Servable c (http :: HTTP | e) s
+  :: forall ex eff server
+   . Servable ex (http :: HTTP | eff) server
   => Settings
-  -> s
-  -> c
+  -> server
+  -> ex
   -> RawData
-  -> Aff (http :: HTTP | e) Responder
-setCorsHeaders settings servable ctx rawData@(RawData rd) = do
-  liftEff $ vary rd.res "Origin"
-  liftEff $ setOrigin settings rd.res
-  if isNotPreflight rd.req
+  -> Aff (http :: HTTP | eff) Responder
+setCorsHeaders settings server extraData rawData = do
+  liftEff $ vary rawData.res "Origin"
+  liftEff $ setOrigin settings rawData.res
+  if isNotPreflight rawData.req
     then do
-      liftEff $ setCorsHeadersIfNotPreflight settings rd.res
-      serve servable ctx rawData
+      liftEff $ setCorsHeadersIfNotPreflight settings rawData.res
+      serve server extraData rawData
     else liftEff do
-      setCorsHeadersIfPreflight settings rd.req rd.res
+      setCorsHeadersIfPreflight settings rawData.req rawData.res
       pure $ toResponder $ StatusOnly 204
 
 
 
-setCorsHeadersIfPreflight :: forall e. Settings -> Request -> Response -> Eff (http :: HTTP | e) Unit
+setCorsHeadersIfPreflight :: forall eff. Settings -> Request -> Response -> Eff (http :: HTTP | eff) Unit
 setCorsHeadersIfPreflight settings req res = do
   setCredentials settings res
   setMaxAge settings res
@@ -89,14 +89,14 @@ setCorsHeadersIfPreflight settings req res = do
 
 
 
-setCorsHeadersIfNotPreflight :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setCorsHeadersIfNotPreflight :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setCorsHeadersIfNotPreflight settings res = do
   setCredentialsIfSpecifiedOrigin settings res
   setExposeHeaders settings res
 
 
 
-setAllowHeaders :: forall e. Settings -> Request -> Response -> Eff (http :: HTTP | e) Unit
+setAllowHeaders :: forall eff. Settings -> Request -> Response -> Eff (http :: HTTP | eff) Unit
 setAllowHeaders settings req res =
   if (length settings.allowHeaders) <= 0
     then setAllowHeadersFromRequest req res
@@ -104,7 +104,7 @@ setAllowHeaders settings req res =
 
 
 
-setAllowHeadersFromRequest :: forall e. Request -> Response -> Eff (http :: HTTP | e) Unit
+setAllowHeadersFromRequest :: forall eff. Request -> Response -> Eff (http :: HTTP | eff) Unit
 setAllowHeadersFromRequest req res =
   case (requestHeader req "access-control-request-headers") of
     Nothing -> pure unit
@@ -112,19 +112,19 @@ setAllowHeadersFromRequest req res =
 
 
 
-setAllowHeadersFromSettings :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setAllowHeadersFromSettings :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setAllowHeadersFromSettings settings res =
   setHeaders res "Access-Control-Allow-Headers" settings.allowHeaders
 
 
 
-setAllowMethods :: forall e. Response -> Eff (http :: HTTP | e) Unit
+setAllowMethods :: forall eff. Response -> Eff (http :: HTTP | eff) Unit
 setAllowMethods res =
   setHeaders res "Access-Control-Allow-Methods" [ "OPTIONS", "POST" ]
 
 
 
-setMaxAge :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setMaxAge :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setMaxAge settings res =
   case settings.maxAge of
     Nothing -> pure unit
@@ -132,7 +132,7 @@ setMaxAge settings res =
 
 
 
-setExposeHeaders :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setExposeHeaders :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setExposeHeaders settings res =
   if (length settings.exposeHeaders) <= 0
     then pure unit
@@ -140,7 +140,7 @@ setExposeHeaders settings res =
 
 
 
-setCredentialsIfSpecifiedOrigin :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setCredentialsIfSpecifiedOrigin :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setCredentialsIfSpecifiedOrigin settings res =
   if settings.origin == "*"
     then pure unit
@@ -148,7 +148,7 @@ setCredentialsIfSpecifiedOrigin settings res =
 
 
 
-setCredentials :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setCredentials :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setCredentials settings res =
   if settings.credentials
     then setHeader res "Access-Control-Allow-Credentials" "true"
@@ -156,7 +156,7 @@ setCredentials settings res =
 
 
 
-setOrigin :: forall e. Settings -> Response -> Eff (http :: HTTP | e) Unit
+setOrigin :: forall eff. Settings -> Response -> Eff (http :: HTTP | eff) Unit
 setOrigin settings res =
   setHeader res "Access-Control-Allow-Origin" settings.origin
 
@@ -182,8 +182,8 @@ isNotPreflight req = (requestMethod req) /= "OPTIONS"
 
 
 
-instance serverableCors :: Servable c (http :: HTTP | e) s => Servable c (http :: HTTP | e) (Cors s) where
-  serve (Cors settings servable) ctx rawData@(RawData rd) =
-    if isNoOrigin rd.req
-      then serve servable ctx rawData
-      else setCorsHeaders settings servable ctx rawData
+instance serverableCors :: Servable ex (http :: HTTP | eff) server => Servable ex (http :: HTTP | eff) (Cors server) where
+  serve (Cors settings server) extraData rawData =
+    if isNoOrigin rawData.req
+      then serve server extraData rawData
+      else setCorsHeaders settings server extraData rawData

@@ -6,7 +6,8 @@ import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
 import Conveyor (handler)
 import Conveyor.Cors (Settings, defaultSettings, cors)
-import Conveyor.Respondable (class Respondable, class RespondableError, Responder(..))
+import Conveyor.Respondable (class Respondable, class RespondableError)
+import Conveyor.Types (Responder(..))
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
 import Node.HTTP (HTTP, ListenOptions, createServer, listen)
@@ -42,12 +43,12 @@ instance respondableErrorResult :: WriteForeign r => RespondableError (Result r)
 
 
 
-getHostname :: forall e. Eff e String
+getHostname :: forall eff. Eff eff String
 getHostname = pure "0.0.0.0"
 
 
 
-getPort :: forall e. Eff (process :: PROCESS | e) Int
+getPort :: forall eff. Eff (process :: PROCESS | eff) Int
 getPort = do
   portStr <- lookupEnv "PORT"
   pure $ case (map fromString portStr) of
@@ -56,12 +57,12 @@ getPort = do
 
 
 
-getBacklog :: forall e. Eff e (Maybe Int)
+getBacklog :: forall eff. Eff eff (Maybe Int)
 getBacklog = pure Nothing
 
 
 
-getConfig :: forall e. Eff (process :: PROCESS | e) ListenOptions
+getConfig :: forall eff. Eff (process :: PROCESS | eff) ListenOptions
 getConfig = do
   hostname <- getHostname
   port <- getPort
@@ -70,7 +71,7 @@ getConfig = do
 
 
 
-myJson :: forall e. Aff e (Result MyJson)
+myJson :: forall eff. Aff eff (Result MyJson)
 myJson = pure $ Success
   { status: 200
   , body: { content: "test content :)" }
@@ -89,7 +90,7 @@ corsSettings = defaultSettings
 
 
 
-main :: forall e. Eff (process :: PROCESS, http :: HTTP | e ) Unit
+main :: Eff (process :: PROCESS, http :: HTTP) Unit
 main = do
   config <- getConfig
   server <- createServer $ handler $ cors corsSettings { myJson }

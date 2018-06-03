@@ -24,10 +24,10 @@
     "output"
   ],
   "dependencies": {
-    "purescript-conveyor": "^1.0.0",
-    "purescript-vary": "^0.2.0"
+    "purescript-conveyor": "^2.0.0",
+    "purescript-vary": "^1.0.0"
   },
   "devDependencies": {
-    "purescript-node-process": "^5.0.0"
+    "purescript-node-process": "^6.0.0"
   }
 }
